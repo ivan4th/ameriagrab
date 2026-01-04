@@ -62,34 +62,40 @@ func (db *DB) InsertCardTransactions(productID string, txns []client.Transaction
 
 // GetCardTransactions retrieves card transactions for a product with optional pagination.
 // If size is 0, returns all transactions. Otherwise returns up to size transactions starting at page.
-func (db *DB) GetCardTransactions(productID string, size, page int) ([]client.Transaction, error) {
+// If ascending is true, returns oldest first; otherwise newest first.
+func (db *DB) GetCardTransactions(productID string, size, page int, ascending bool) ([]client.Transaction, error) {
 	var rows *sql.Rows
 	var err error
 
+	order := "DESC"
+	if ascending {
+		order = "ASC"
+	}
+
 	if size == 0 {
 		// No limit - return all
-		rows, err = db.Query(`
+		rows, err = db.Query(fmt.Sprintf(`
 			SELECT id, transaction_type, accounting_type, state,
 				   amount_currency, amount_value, correspondent_account_number,
 				   correspondent_account_name, details, operation_date,
 				   workflow_code, date, year, month
 			FROM card_transactions
 			WHERE product_id = ?
-			ORDER BY operation_date DESC
-		`, productID)
+			ORDER BY operation_date %s
+		`, order), productID)
 	} else {
 		// Paginated query
 		offset := page * size
-		rows, err = db.Query(`
+		rows, err = db.Query(fmt.Sprintf(`
 			SELECT id, transaction_type, accounting_type, state,
 				   amount_currency, amount_value, correspondent_account_number,
 				   correspondent_account_name, details, operation_date,
 				   workflow_code, date, year, month
 			FROM card_transactions
 			WHERE product_id = ?
-			ORDER BY operation_date DESC
+			ORDER BY operation_date %s
 			LIMIT ? OFFSET ?
-		`, productID, size, offset)
+		`, order), productID, size, offset)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query card transactions: %w", err)

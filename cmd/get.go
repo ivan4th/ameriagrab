@@ -21,6 +21,7 @@ var (
 	getLocal           bool
 	getExtended        bool
 	getWide            bool
+	getAscending       bool
 )
 
 var getCmd = &cobra.Command{
@@ -66,7 +67,7 @@ func getFromLocal(id string) error {
 		if getForceAccountAPI {
 			// Get linked account transactions with pagination
 			// size=0 means no limit for DB
-			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage, getExtended)
+			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage, getExtended, getAscending)
 			if err != nil {
 				return fmt.Errorf("fetching linked account transactions: %w", err)
 			}
@@ -77,7 +78,7 @@ func getFromLocal(id string) error {
 		} else {
 			// Get card transactions with pagination
 			// size=0 means no limit for DB
-			txns, err = database.GetCardTransactions(id, getSize, getPage)
+			txns, err = database.GetCardTransactions(id, getSize, getPage, getAscending)
 			if err != nil {
 				return fmt.Errorf("fetching card transactions: %w", err)
 			}
@@ -104,7 +105,7 @@ func getFromLocal(id string) error {
 		}
 	} else {
 		// For accounts, return account transactions from DB
-		txns, err := database.GetAccountTransactions(id)
+		txns, err := database.GetAccountTransactions(id, getAscending)
 		if err != nil {
 			return fmt.Errorf("fetching account transactions: %w", err)
 		}
@@ -162,6 +163,9 @@ func getFromAPI(id string) error {
 		if err != nil {
 			return fmt.Errorf("fetching card transactions: %w", err)
 		}
+		if getAscending {
+			reverseTransactions(txns.Data.Entries)
+		}
 		if getJSONOutput {
 			out, err := json.MarshalIndent(txns, "", "  ")
 			if err != nil {
@@ -195,6 +199,10 @@ func getFromAPI(id string) error {
 			}
 		}
 
+		if getAscending {
+			reverseTransactions(txns.Data.Entries)
+		}
+
 		if getJSONOutput {
 			out, err := json.MarshalIndent(txns, "", "  ")
 			if err != nil {
@@ -216,6 +224,9 @@ func getFromAPI(id string) error {
 		if err != nil {
 			return fmt.Errorf("fetching account history: %w", err)
 		}
+		if getAscending {
+			reverseAccountTransactions(history.Data.Transactions)
+		}
 		if getJSONOutput {
 			out, err := json.MarshalIndent(history, "", "  ")
 			if err != nil {
@@ -228,6 +239,20 @@ func getFromAPI(id string) error {
 	}
 
 	return nil
+}
+
+// reverseTransactions reverses a slice of transactions in place
+func reverseTransactions(txns []client.Transaction) {
+	for i, j := 0, len(txns)-1; i < j; i, j = i+1, j-1 {
+		txns[i], txns[j] = txns[j], txns[i]
+	}
+}
+
+// reverseAccountTransactions reverses a slice of account transactions in place
+func reverseAccountTransactions(txns []client.AccountTransaction) {
+	for i, j := 0, len(txns)-1; i < j; i, j = i+1, j-1 {
+		txns[i], txns[j] = txns[j], txns[i]
+	}
 }
 
 // fetchExtendedInfo fetches extended info for transactions in parallel using errgroup
@@ -276,4 +301,5 @@ func init() {
 	getCmd.Flags().BoolVarP(&getLocal, "local", "l", false, "Read from local database")
 	getCmd.Flags().BoolVarP(&getExtended, "extended", "x", false, "Fetch extended transaction info (implies -a for cards)")
 	getCmd.Flags().BoolVarP(&getWide, "wide", "w", false, "Disable column truncation in output")
+	getCmd.Flags().BoolVarP(&getAscending, "asc", "o", false, "Show oldest transactions first (ascending order)")
 }

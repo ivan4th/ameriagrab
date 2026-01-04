@@ -63,7 +63,8 @@ func (db *DB) InsertLinkedAccountTransactions(productID string, txns []client.Tr
 // GetLinkedAccountTransactions retrieves card linked account transactions for a product with optional pagination.
 // If size is 0, returns all transactions. Otherwise returns up to size transactions starting at page.
 // If includeExtended is true, also loads extended info for transactions that have it.
-func (db *DB) GetLinkedAccountTransactions(productID string, size, page int, includeExtended bool) ([]client.Transaction, error) {
+// If ascending is true, returns oldest first; otherwise newest first.
+func (db *DB) GetLinkedAccountTransactions(productID string, size, page int, includeExtended, ascending bool) ([]client.Transaction, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -76,14 +77,19 @@ func (db *DB) GetLinkedAccountTransactions(productID string, size, page int, inc
 				  card_masked_number, ext_operation_id, swift_details, extended_fetched`
 	}
 
+	order := "DESC"
+	if ascending {
+		order = "ASC"
+	}
+
 	if size == 0 {
 		// No limit - return all
 		rows, err = db.Query(fmt.Sprintf(`
 			SELECT %s
 			FROM card_linked_account_transactions
 			WHERE product_id = ?
-			ORDER BY operation_date DESC
-		`, cols), productID)
+			ORDER BY operation_date %s
+		`, cols, order), productID)
 	} else {
 		// Paginated query
 		offset := page * size
@@ -91,9 +97,9 @@ func (db *DB) GetLinkedAccountTransactions(productID string, size, page int, inc
 			SELECT %s
 			FROM card_linked_account_transactions
 			WHERE product_id = ?
-			ORDER BY operation_date DESC
+			ORDER BY operation_date %s
 			LIMIT ? OFFSET ?
-		`, cols), productID, size, offset)
+		`, cols, order), productID, size, offset)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query linked account transactions: %w", err)

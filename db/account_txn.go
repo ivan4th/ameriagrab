@@ -74,9 +74,15 @@ func (db *DB) InsertAccountTransactions(productID string, txns []client.AccountT
 	return inserted, err
 }
 
-// GetAccountTransactions retrieves all account transactions for a product
-func (db *DB) GetAccountTransactions(productID string) ([]client.AccountTransaction, error) {
-	rows, err := db.Query(`
+// GetAccountTransactions retrieves all account transactions for a product.
+// If ascending is true, returns oldest first; otherwise newest first.
+func (db *DB) GetAccountTransactions(productID string, ascending bool) ([]client.AccountTransaction, error) {
+	order := "DESC"
+	if ascending {
+		order = "ASC"
+	}
+
+	rows, err := db.Query(fmt.Sprintf(`
 		SELECT id, transaction_id, operation_id, status,
 			   transaction_type, workflow_code, flow_direction,
 			   transaction_date, settled_date, date, month, year,
@@ -87,8 +93,8 @@ func (db *DB) GetAccountTransactions(productID string) ([]client.AccountTransact
 			   domestic_amount_currency, domestic_amount_value
 		FROM account_transactions
 		WHERE product_id = ?
-		ORDER BY transaction_date DESC
-	`, productID)
+		ORDER BY transaction_date %s
+	`, order), productID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query account transactions: %w", err)
 	}

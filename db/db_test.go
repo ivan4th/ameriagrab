@@ -593,17 +593,29 @@ func TestGetCardTransactions(t *testing.T) {
 		t.Fatalf("failed to insert: %v", err)
 	}
 
-	// Test size=0 (no limit)
-	result, err := db.GetCardTransactions("card-001", 0, 0)
+	// Test size=0 (no limit), descending (default)
+	result, err := db.GetCardTransactions("card-001", 0, 0, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
 	if len(result) != 3 {
 		t.Fatalf("expected 3 transactions with size=0, got %d", len(result))
 	}
+	if result[0].ID != "txn-003" {
+		t.Errorf("expected newest first (desc), got %s", result[0].ID)
+	}
+
+	// Test ascending order
+	result, err = db.GetCardTransactions("card-001", 0, 0, true)
+	if err != nil {
+		t.Fatalf("failed to get transactions ascending: %v", err)
+	}
+	if result[0].ID != "txn-001" {
+		t.Errorf("expected oldest first (asc), got %s", result[0].ID)
+	}
 
 	// Test pagination: size=2, page=0
-	result, err = db.GetCardTransactions("card-001", 2, 0)
+	result, err = db.GetCardTransactions("card-001", 2, 0, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -612,7 +624,7 @@ func TestGetCardTransactions(t *testing.T) {
 	}
 
 	// Test pagination: size=2, page=1
-	result, err = db.GetCardTransactions("card-001", 2, 1)
+	result, err = db.GetCardTransactions("card-001", 2, 1, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -650,7 +662,7 @@ func TestGetAccountTransactions(t *testing.T) {
 		t.Fatalf("failed to insert: %v", err)
 	}
 
-	result, err := db.GetAccountTransactions("acct-001")
+	result, err := db.GetAccountTransactions("acct-001", false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -665,6 +677,48 @@ func TestGetAccountTransactions(t *testing.T) {
 	}
 	if result[0].SettledAmount.Value != 42000 {
 		t.Errorf("expected settled amount 42000, got %f", result[0].SettledAmount.Value)
+	}
+}
+
+func TestGetAccountTransactions_Ascending(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	txns := []client.AccountTransaction{
+		{
+			ID:              "atxn-001",
+			TransactionType: "TRANSFER",
+			TransactionDate: 1705315200000, // Earlier
+		},
+		{
+			ID:              "atxn-002",
+			TransactionType: "TRANSFER",
+			TransactionDate: 1705401600000, // Later
+		},
+	}
+	if _, err := db.InsertAccountTransactions("acct-001", txns); err != nil {
+		t.Fatalf("failed to insert: %v", err)
+	}
+
+	// Test descending (default)
+	result, err := db.GetAccountTransactions("acct-001", false)
+	if err != nil {
+		t.Fatalf("failed to get transactions: %v", err)
+	}
+	if result[0].ID != "atxn-002" {
+		t.Errorf("expected newest first (desc), got %s", result[0].ID)
+	}
+
+	// Test ascending
+	result, err = db.GetAccountTransactions("acct-001", true)
+	if err != nil {
+		t.Fatalf("failed to get transactions: %v", err)
+	}
+	if result[0].ID != "atxn-001" {
+		t.Errorf("expected oldest first (asc), got %s", result[0].ID)
 	}
 }
 
@@ -758,17 +812,21 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 		t.Fatalf("failed to insert: %v", err)
 	}
 
-	// Test size=0 (no limit)
-	result, err := db.GetLinkedAccountTransactions("card-001", 0, 0, false)
+	// Test size=0 (no limit), descending (default)
+	result, err := db.GetLinkedAccountTransactions("card-001", 0, 0, false, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
 	if len(result) != 3 {
 		t.Fatalf("expected 3 transactions with size=0, got %d", len(result))
 	}
+	// Descending: newest first
+	if result[0].ID != "lat-003" {
+		t.Errorf("expected newest first (desc), got %s", result[0].ID)
+	}
 
 	// Test pagination: size=2, page=0
-	result, err = db.GetLinkedAccountTransactions("card-001", 2, 0, false)
+	result, err = db.GetLinkedAccountTransactions("card-001", 2, 0, false, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -777,7 +835,7 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 	}
 
 	// Test pagination: size=2, page=1
-	result, err = db.GetLinkedAccountTransactions("card-001", 2, 1, false)
+	result, err = db.GetLinkedAccountTransactions("card-001", 2, 1, false, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -786,6 +844,18 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 	}
 	if result[0].ID != "lat-001" {
 		t.Errorf("expected oldest txn on page 1, got %s", result[0].ID)
+	}
+
+	// Test ascending order
+	result, err = db.GetLinkedAccountTransactions("card-001", 0, 0, false, true)
+	if err != nil {
+		t.Fatalf("failed to get transactions: %v", err)
+	}
+	if result[0].ID != "lat-001" {
+		t.Errorf("expected oldest first (asc), got %s", result[0].ID)
+	}
+	if result[2].ID != "lat-003" {
+		t.Errorf("expected newest last (asc), got %s", result[2].ID)
 	}
 }
 
