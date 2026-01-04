@@ -97,15 +97,28 @@ type AccountsAndCardsResponse struct {
 
 // ProductInfo represents a card or account
 type ProductInfo struct {
-	ProductType   string  `json:"productType"` // "CARD" or "ACCOUNT"
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	CardNumber    string  `json:"cardNumber,omitempty"`    // Cards only
-	AccountNumber string  `json:"accountNumber,omitempty"` // Accounts only
-	AccountID     string  `json:"accountId,omitempty"`     // Cards only: linked account ID
-	Currency      string  `json:"currency"`
-	Balance       float64 `json:"balance"`
-	Status        string  `json:"status"`
+	ProductType      string  `json:"productType"` // "CARD" or "ACCOUNT"
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	CardNumber       string  `json:"cardNumber,omitempty"`       // Cards only
+	AccountNumber    string  `json:"accountNumber,omitempty"`    // Accounts only
+	AccountID        string  `json:"accountId,omitempty"`        // Cards only: linked account ID
+	Currency         string  `json:"currency"`
+	Balance          float64 `json:"balance"`
+	AvailableBalance float64 `json:"availableBalance,omitempty"` // Fetched separately
+	Status           string  `json:"status"`
+}
+
+// AvailableBalanceResponse holds the response from /api/accounts-and-cards/available-balance
+type AvailableBalanceResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Balance          float64 `json:"balance"`
+		AvailableBalance float64 `json:"availableBalance"`
+		FrozenBalance    float64 `json:"frozenBalance"`
+		OfflineAvailable float64 `json:"offlineAvailable"`
+	} `json:"data"`
+	ErrorMessages interface{} `json:"errorMessages"`
 }
 
 // HistoryResponse holds the response from /api/history

@@ -21,6 +21,7 @@ var migrations = []string{
 		account_id TEXT,
 		currency TEXT,
 		balance REAL,
+		available_balance REAL,
 		status TEXT,
 		order_index INTEGER NOT NULL DEFAULT 0,
 		synced_at INTEGER NOT NULL
@@ -128,6 +129,7 @@ var migrations = []string{
 		account_number TEXT,
 		currency TEXT,
 		balance REAL,
+		available_balance REAL,
 		status TEXT,
 		order_index INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (snapshot_id, product_id),

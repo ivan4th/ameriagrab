@@ -172,3 +172,37 @@ func (c *Client) GetTransactionDetails(accessToken, transactionID string) (*Tran
 
 	return &result, nil
 }
+
+// GetAvailableBalance fetches the available balance for a product (card or account)
+func (c *Client) GetAvailableBalance(accessToken, productType, productID string) (*AvailableBalanceResponse, error) {
+	url := fmt.Sprintf("%s/api/accounts-and-cards/available-balance?productType=%s&productId=%s",
+		c.APIBaseURL, productType, productID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create available-balance request: %w", err)
+	}
+	c.AddAPIHeaders(req, accessToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch available-balance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read available-balance response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("available-balance request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result AvailableBalanceResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse available-balance response: %w", err)
+	}
+
+	return &result, nil
+}

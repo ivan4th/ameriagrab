@@ -36,10 +36,10 @@ func (db *DB) CreateSnapshot() (int64, error) {
 		_, err = tx.Exec(`
 			INSERT INTO snapshot_products (
 				snapshot_id, product_id, product_type, name,
-				card_number, account_number, currency, balance, status, order_index
+				card_number, account_number, currency, balance, available_balance, status, order_index
 			)
 			SELECT ?, id, product_type, name,
-				   card_number, account_number, currency, balance, status, order_index
+				   card_number, account_number, currency, balance, available_balance, status, order_index
 			FROM products
 			ORDER BY order_index
 		`, snapshotID)
@@ -92,7 +92,7 @@ func (db *DB) GetSnapshots() ([]Snapshot, error) {
 func (db *DB) getSnapshotProducts(snapshotID int64) ([]client.ProductInfo, error) {
 	rows, err := db.Query(`
 		SELECT product_id, product_type, name, card_number, account_number,
-			   currency, balance, status
+			   currency, balance, available_balance, status
 		FROM snapshot_products
 		WHERE snapshot_id = ?
 		ORDER BY order_index
@@ -106,12 +106,12 @@ func (db *DB) getSnapshotProducts(snapshotID int64) ([]client.ProductInfo, error
 	for rows.Next() {
 		var p client.ProductInfo
 		var cardNumber, accountNumber sql.NullString
-		var balance sql.NullFloat64
+		var balance, availableBalance sql.NullFloat64
 
 		err := rows.Scan(
 			&p.ID, &p.ProductType, &p.Name,
 			&cardNumber, &accountNumber,
-			&p.Currency, &balance, &p.Status,
+			&p.Currency, &balance, &availableBalance, &p.Status,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan product: %w", err)
@@ -120,6 +120,7 @@ func (db *DB) getSnapshotProducts(snapshotID int64) ([]client.ProductInfo, error
 		p.CardNumber = cardNumber.String
 		p.AccountNumber = accountNumber.String
 		p.Balance = balance.Float64
+		p.AvailableBalance = availableBalance.Float64
 
 		products = append(products, p)
 	}

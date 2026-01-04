@@ -16,8 +16,8 @@ func (db *DB) UpsertProducts(products []client.ProductInfo) error {
 		stmt, err := tx.Prepare(`
 			INSERT INTO products (
 				id, product_type, name, card_number, account_number,
-				account_id, currency, balance, status, order_index, synced_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				account_id, currency, balance, available_balance, status, order_index, synced_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				product_type = excluded.product_type,
 				name = excluded.name,
@@ -26,6 +26,7 @@ func (db *DB) UpsertProducts(products []client.ProductInfo) error {
 				account_id = excluded.account_id,
 				currency = excluded.currency,
 				balance = excluded.balance,
+				available_balance = excluded.available_balance,
 				status = excluded.status,
 				order_index = excluded.order_index,
 				synced_at = excluded.synced_at
@@ -45,6 +46,7 @@ func (db *DB) UpsertProducts(products []client.ProductInfo) error {
 				nullString(p.AccountID),
 				p.Currency,
 				p.Balance,
+				p.AvailableBalance,
 				p.Status,
 				i, // order_index preserves API order
 				syncedAt,
@@ -61,7 +63,7 @@ func (db *DB) UpsertProducts(products []client.ProductInfo) error {
 func (db *DB) GetProducts() ([]client.ProductInfo, error) {
 	rows, err := db.Query(`
 		SELECT id, product_type, name, card_number, account_number,
-			   account_id, currency, balance, status
+			   account_id, currency, balance, available_balance, status
 		FROM products
 		ORDER BY order_index
 	`)
@@ -74,6 +76,7 @@ func (db *DB) GetProducts() ([]client.ProductInfo, error) {
 	for rows.Next() {
 		var p client.ProductInfo
 		var cardNumber, accountNumber, accountID sql.NullString
+		var availableBalance sql.NullFloat64
 
 		err := rows.Scan(
 			&p.ID,
@@ -84,6 +87,7 @@ func (db *DB) GetProducts() ([]client.ProductInfo, error) {
 			&accountID,
 			&p.Currency,
 			&p.Balance,
+			&availableBalance,
 			&p.Status,
 		)
 		if err != nil {
@@ -93,6 +97,7 @@ func (db *DB) GetProducts() ([]client.ProductInfo, error) {
 		p.CardNumber = cardNumber.String
 		p.AccountNumber = accountNumber.String
 		p.AccountID = accountID.String
+		p.AvailableBalance = availableBalance.Float64
 
 		products = append(products, p)
 	}
@@ -108,10 +113,11 @@ func (db *DB) GetProducts() ([]client.ProductInfo, error) {
 func (db *DB) GetProductByID(id string) (*client.ProductInfo, error) {
 	var p client.ProductInfo
 	var cardNumber, accountNumber, accountID sql.NullString
+	var availableBalance sql.NullFloat64
 
 	err := db.QueryRow(`
 		SELECT id, product_type, name, card_number, account_number,
-			   account_id, currency, balance, status
+			   account_id, currency, balance, available_balance, status
 		FROM products WHERE id = ?
 	`, id).Scan(
 		&p.ID,
@@ -122,6 +128,7 @@ func (db *DB) GetProductByID(id string) (*client.ProductInfo, error) {
 		&accountID,
 		&p.Currency,
 		&p.Balance,
+		&availableBalance,
 		&p.Status,
 	)
 	if err == sql.ErrNoRows {
@@ -134,6 +141,7 @@ func (db *DB) GetProductByID(id string) (*client.ProductInfo, error) {
 	p.CardNumber = cardNumber.String
 	p.AccountNumber = accountNumber.String
 	p.AccountID = accountID.String
+	p.AvailableBalance = availableBalance.Float64
 
 	return &p, nil
 }

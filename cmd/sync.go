@@ -52,6 +52,16 @@ Environment variables:
 			return fmt.Errorf("fetching accounts and cards: %w", err)
 		}
 
+		// Fetch available balance for each product
+		for i := range resp.Data.AccountsAndCards {
+			p := &resp.Data.AccountsAndCards[i]
+			balResp, err := c.GetAvailableBalance(accessToken, p.ProductType, p.ID)
+			if err != nil {
+				return fmt.Errorf("fetching available balance for %s: %w", p.ID, err)
+			}
+			p.AvailableBalance = balResp.Data.AvailableBalance
+		}
+
 		if err := database.UpsertProducts(resp.Data.AccountsAndCards); err != nil {
 			return fmt.Errorf("storing products: %w", err)
 		}

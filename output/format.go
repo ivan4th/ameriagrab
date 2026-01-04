@@ -150,7 +150,7 @@ func PrintAccountsAndCards(resp *client.AccountsAndCardsResponse) {
 			number = p.AccountNumber
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%.2f\t%s\n",
-			p.ProductType, p.ID, number, p.Name, p.Currency, p.Balance, p.Status)
+			p.ProductType, p.ID, number, p.Name, p.Currency, p.AvailableBalance, p.Status)
 	}
 	w.Flush()
 }
@@ -170,7 +170,7 @@ func PrintSnapshots(snapshots []db.Snapshot) {
 				number = p.AccountNumber
 			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%.2f\t%s\n",
-				p.ProductType, p.ID, number, p.Name, p.Currency, p.Balance, p.Status)
+				p.ProductType, p.ID, number, p.Name, p.Currency, p.AvailableBalance, p.Status)
 		}
 		w.Flush()
 
