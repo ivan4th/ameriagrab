@@ -79,7 +79,7 @@ func TestPrintCardTransactions_Table(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	PrintCardTransactions(txns, false)
+	PrintCardTransactions(txns, false, false)
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -163,7 +163,7 @@ func TestPrintAccountHistory_Table(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	PrintAccountHistory(history)
+	PrintAccountHistory(history, false)
 
 	w.Close()
 	os.Stdout = oldStdout

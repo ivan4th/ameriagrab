@@ -22,7 +22,7 @@ func TruncateString(s string, maxLen int) string {
 }
 
 // PrintCardTransactions prints card transactions in human-readable table format
-func PrintCardTransactions(txns *client.TransactionsResponse, showExtended bool) {
+func PrintCardTransactions(txns *client.TransactionsResponse, showExtended, wide bool) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	if showExtended {
 		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS\tRECEIVER")
@@ -51,13 +51,22 @@ func PrintCardTransactions(txns *client.TransactionsResponse, showExtended bool)
 		txType = strings.ReplaceAll(txType, "purchasecompletion:", "pcomp:")
 		txType = strings.ReplaceAll(txType, "purchase:", "p:")
 
+		details := t.Details
+		if !wide {
+			if showExtended {
+				details = TruncateString(details, 40)
+			} else {
+				details = TruncateString(details, 50)
+			}
+		}
+
 		if showExtended {
 			receiver := formatReceiver(t.Extended)
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				date, txType, amount, TruncateString(t.Details, 40), receiver)
+				date, txType, amount, details, receiver)
 		} else {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-				date, txType, amount, TruncateString(t.Details, 50))
+				date, txType, amount, details)
 		}
 	}
 	w.Flush()
@@ -93,7 +102,7 @@ func formatReceiver(ext *client.TransactionExtendedInfo) string {
 }
 
 // PrintAccountHistory prints account history in human-readable table format
-func PrintAccountHistory(history *client.HistoryResponse) {
+func PrintAccountHistory(history *client.HistoryResponse, wide bool) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tBENEFICIARY\tDETAILS")
 	for _, t := range history.Data.Transactions {
@@ -114,8 +123,15 @@ func PrintAccountHistory(history *client.HistoryResponse) {
 		txType := t.TransactionType
 		txType = strings.ReplaceAll(txType, "transfer:", "xfer:")
 
+		beneficiary := t.BeneficiaryName
+		details := t.Details
+		if !wide {
+			beneficiary = TruncateString(beneficiary, 30)
+			details = TruncateString(details, 40)
+		}
+
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			date, txType, amount, TruncateString(t.BeneficiaryName, 30), TruncateString(t.Details, 40))
+			date, txType, amount, beneficiary, details)
 	}
 	w.Flush()
 	if history.Data.HasNext {

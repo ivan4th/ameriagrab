@@ -20,6 +20,7 @@ var (
 	getForceAccountAPI bool
 	getLocal           bool
 	getExtended        bool
+	getWide            bool
 )
 
 var getCmd = &cobra.Command{
@@ -99,7 +100,7 @@ func getFromLocal(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(resp, getExtended)
+			output.PrintCardTransactions(resp, getExtended, getWide)
 		}
 	} else {
 		// For accounts, return account transactions from DB
@@ -122,7 +123,7 @@ func getFromLocal(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintAccountHistory(resp)
+			output.PrintAccountHistory(resp, getWide)
 		}
 	}
 
@@ -168,7 +169,7 @@ func getFromAPI(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(txns, false)
+			output.PrintCardTransactions(txns, false, getWide)
 		}
 	} else if productType == "CARD" && getForceAccountAPI {
 		// Card with --account flag: use events/past API with linked account ID
@@ -201,7 +202,7 @@ func getFromAPI(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(txns, getExtended)
+			output.PrintCardTransactions(txns, getExtended, getWide)
 		}
 	} else {
 		// Account: use history API
@@ -222,7 +223,7 @@ func getFromAPI(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintAccountHistory(history)
+			output.PrintAccountHistory(history, getWide)
 		}
 	}
 
@@ -274,4 +275,5 @@ func init() {
 	getCmd.Flags().BoolVarP(&getForceAccountAPI, "account", "a", false, "Use account history API (even for cards)")
 	getCmd.Flags().BoolVarP(&getLocal, "local", "l", false, "Read from local database")
 	getCmd.Flags().BoolVarP(&getExtended, "extended", "x", false, "Fetch extended transaction info (implies -a for cards)")
+	getCmd.Flags().BoolVarP(&getWide, "wide", "w", false, "Disable column truncation in output")
 }
