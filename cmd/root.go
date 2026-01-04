@@ -1,0 +1,65 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/ivan4th/ameriagrab/client"
+	"github.com/spf13/cobra"
+)
+
+// RootCmd represents the base command
+var RootCmd = &cobra.Command{
+	Use:   "ameriagrab",
+	Short: "Ameriabank transaction grabber",
+	Long: `ameriagrab retrieves accounts, cards, and transaction data from Ameriabank.
+
+Environment variables:
+  AMERIA_USERNAME    - Ameriabank username (required)
+  AMERIA_PASSWORD    - Ameriabank password (required)
+  AMERIA_SESSION_DIR - Directory to persist session (optional)
+  AMERIA_DEBUG_DIR   - Directory to save debug files (optional)`,
+}
+
+// SetupClient creates and authenticates the Ameriabank client
+func SetupClient() (*client.Client, string, error) {
+	username := os.Getenv("AMERIA_USERNAME")
+	password := os.Getenv("AMERIA_PASSWORD")
+	sessionDir := os.Getenv("AMERIA_SESSION_DIR")
+	debugDir := os.Getenv("AMERIA_DEBUG_DIR")
+
+	if username == "" || password == "" {
+		return nil, "", fmt.Errorf("AMERIA_USERNAME and AMERIA_PASSWORD environment variables must be set")
+	}
+
+	c, err := client.NewClient(username, password, sessionDir, debugDir)
+	if err != nil {
+		return nil, "", fmt.Errorf("creating client: %w", err)
+	}
+
+	fmt.Fprintln(os.Stderr, "Checking for saved session or logging in...")
+	accessToken, err := c.GetOrRefreshToken()
+	if err != nil {
+		return nil, "", fmt.Errorf("getting access token: %w", err)
+	}
+
+	// Initialize session with prerequisite API calls (only if clientID not restored)
+	if c.ClientID == "" {
+		fmt.Fprintln(os.Stderr, "Client ID not found in session, initializing...")
+		if err := c.InitializeSession(accessToken); err != nil {
+			return nil, "", fmt.Errorf("initializing session: %w", err)
+		}
+		if err := c.UpdateSessionClientID(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update session with client ID: %v\n", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Using restored Client ID: %s\n", c.ClientID)
+	}
+
+	return c, accessToken, nil
+}
+
+func init() {
+	RootCmd.AddCommand(listCmd)
+	RootCmd.AddCommand(getCmd)
+}
