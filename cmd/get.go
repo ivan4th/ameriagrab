@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ivan4th/ameriagrab/client"
+	"github.com/ivan4th/ameriagrab/db"
 	"github.com/ivan4th/ameriagrab/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -22,6 +23,7 @@ var (
 	getExtended        bool
 	getWide            bool
 	getAscending       bool
+	getCombined        bool
 )
 
 var getCmd = &cobra.Command{
@@ -30,6 +32,16 @@ var getCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
+
+		// --combined requires --local
+		if getCombined && !getLocal {
+			return fmt.Errorf("--combined requires --local")
+		}
+
+		// -c implies -x (combined mode should show receiver/sender info)
+		if getCombined {
+			getExtended = true
+		}
 
 		// -x implies -a for cards (extended info only available via linked account API)
 		if getExtended {
@@ -64,7 +76,19 @@ func getFromLocal(id string) error {
 		var err error
 		var totalCount int
 
-		if getForceAccountAPI {
+		if getCombined {
+			// Combined mode: merge card and linked account transactions
+			opts := db.CombinedTransactionsOptions{
+				Size:            getSize,
+				Page:            getPage,
+				IncludeExtended: getExtended,
+				Ascending:       getAscending,
+			}
+			txns, totalCount, err = database.GetCombinedTransactions(id, opts)
+			if err != nil {
+				return fmt.Errorf("fetching combined transactions: %w", err)
+			}
+		} else if getForceAccountAPI {
 			// Get linked account transactions with pagination
 			// size=0 means no limit for DB
 			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage, getExtended, getAscending)
@@ -302,4 +326,5 @@ func init() {
 	getCmd.Flags().BoolVarP(&getExtended, "extended", "x", false, "Fetch extended transaction info (implies -a for cards)")
 	getCmd.Flags().BoolVarP(&getWide, "wide", "w", false, "Disable column truncation in output")
 	getCmd.Flags().BoolVarP(&getAscending, "asc", "o", false, "Show oldest transactions first (ascending order)")
+	getCmd.Flags().BoolVarP(&getCombined, "combined", "c", false, "Combine card and linked account transactions (local only)")
 }

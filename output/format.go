@@ -26,7 +26,7 @@ func TruncateString(s string, maxLen int) string {
 func PrintCardTransactions(txns *client.TransactionsResponse, showExtended, wide bool) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	if showExtended {
-		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS\tRECEIVER")
+		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS\tCOUNTERPARTY")
 	} else {
 		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS")
 	}
