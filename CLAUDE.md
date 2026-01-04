@@ -22,10 +22,12 @@ go test ./... -v
 export AMERIA_USERNAME=$(op read 'op://Personal/Ameriabank personal/username')
 export AMERIA_PASSWORD=$(op read 'op://Personal/Ameriabank personal/password')
 export AMERIA_SESSION_DIR=/tmp/ameria-session  # optional, enables session persistence
+export AMERIA_DB_PATH=/tmp/ameria.db           # optional, enables sync and local mode
 
 # List all accounts and cards
 ./ameriagrab list              # Table output
 ./ameriagrab list --json       # JSON output
+./ameriagrab list --local      # Read from local database
 
 # Get transactions for a card or account
 ./ameriagrab get <id>                  # Table output
@@ -33,6 +35,11 @@ export AMERIA_SESSION_DIR=/tmp/ameria-session  # optional, enables session persi
 ./ameriagrab get <id> --size 100       # Limit number of transactions
 ./ameriagrab get <id> --page 1         # Pagination (0-indexed)
 ./ameriagrab get <id> --account        # Force account history API for cards
+./ameriagrab get <id> --local          # Read from local database
+
+# Sync all transactions to local database
+./ameriagrab sync              # Download all transactions
+./ameriagrab sync --verbose    # Verbose output
 ```
 
 ## Environment Variables
@@ -41,6 +48,7 @@ export AMERIA_SESSION_DIR=/tmp/ameria-session  # optional, enables session persi
 - `AMERIA_PASSWORD` - Ameriabank password (required)
 - `AMERIA_SESSION_DIR` - Directory for session persistence (optional; if not set, no session is stored/loaded)
 - `AMERIA_DEBUG_DIR` - Directory for debug HTML files on errors (optional; if not set, no debug files are saved)
+- `AMERIA_DB_PATH` - Path to SQLite database for sync command and --local flag (optional)
 
 ## Project Overview
 
@@ -52,9 +60,10 @@ This is a CLI tool that authenticates with Ameriabank's online banking (myameria
 ameriagrab/
 ├── main.go              # Minimal entry point
 ├── cmd/
-│   ├── root.go          # Cobra root command and client setup
-│   ├── list.go          # list subcommand
-│   └── get.go           # get subcommand
+│   ├── root.go          # Cobra root command, client and database setup
+│   ├── list.go          # list subcommand (--local flag for DB read)
+│   ├── get.go           # get subcommand (--local flag for DB read)
+│   └── sync.go          # sync subcommand (downloads all transactions to DB)
 ├── client/
 │   ├── types.go         # All response/request types
 │   ├── headers.go       # HTTP header builders and constants
@@ -63,6 +72,13 @@ ameriagrab/
 │   ├── auth.go          # Login, push confirmation, token exchange
 │   ├── api.go           # API methods (GetTransactions, GetAccountsAndCards, etc.)
 │   └── client_test.go   # Client package tests
+├── db/
+│   ├── db.go            # Database connection, transactions, migrations
+│   ├── schema.go        # SQLite schema and migrations
+│   ├── products.go      # Product (card/account) storage
+│   ├── card_txn.go      # Card transaction storage
+│   ├── account_txn.go   # Account transaction storage
+│   └── db_test.go       # Database package tests
 └── output/
     ├── format.go        # Output formatting functions
     └── format_test.go   # Output package tests
@@ -81,6 +97,13 @@ ameriagrab/
 - **cmd**: Cobra CLI commands
   - `list`: List all accounts and cards
   - `get`: Get transactions for a specific card or account
+  - `sync`: Download all transactions to local SQLite database
+
+- **db**: SQLite database for local storage
+  - Uses `modernc.org/sqlite` (pure Go, no CGO)
+  - Separate tables for products, card transactions, account transactions
+  - Transaction deduplication by ID (never downloads twice)
+  - Automatic schema migrations
 
 - **output**: Formatting utilities
   - Table and JSON output formatting

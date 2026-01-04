@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ivan4th/ameriagrab/client"
+	"github.com/ivan4th/ameriagrab/db"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,8 @@ Environment variables:
   AMERIA_USERNAME    - Ameriabank username (required)
   AMERIA_PASSWORD    - Ameriabank password (required)
   AMERIA_SESSION_DIR - Directory to persist session (optional)
-  AMERIA_DEBUG_DIR   - Directory to save debug files (optional)`,
+  AMERIA_DEBUG_DIR   - Directory to save debug files (optional)
+  AMERIA_DB_PATH     - Path to SQLite database for sync/local mode (optional)`,
 }
 
 // SetupClient creates and authenticates the Ameriabank client
@@ -59,7 +61,23 @@ func SetupClient() (*client.Client, string, error) {
 	return c, accessToken, nil
 }
 
+// OpenDatabase opens the SQLite database from AMERIA_DB_PATH
+func OpenDatabase() (*db.DB, error) {
+	dbPath := os.Getenv("AMERIA_DB_PATH")
+	if dbPath == "" {
+		return nil, fmt.Errorf("AMERIA_DB_PATH environment variable must be set")
+	}
+
+	database, err := db.Open(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening database: %w", err)
+	}
+
+	return database, nil
+}
+
 func init() {
 	RootCmd.AddCommand(listCmd)
 	RootCmd.AddCommand(getCmd)
+	RootCmd.AddCommand(syncCmd)
 }
