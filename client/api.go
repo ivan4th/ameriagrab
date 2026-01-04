@@ -206,3 +206,36 @@ func (c *Client) GetAvailableBalance(accessToken, productType, productID string)
 
 	return &result, nil
 }
+
+// GetTemplates fetches transfer templates
+func (c *Client) GetTemplates(accessToken string) (*TemplatesResponse, error) {
+	url := fmt.Sprintf("%s/api/templates?page=1&size=1000&hasGroup=false", c.APIBaseURL)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create templates request: %w", err)
+	}
+	c.AddAPIHeaders(req, accessToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch templates: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read templates response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("templates request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var templatesResult TemplatesResponse
+	if err := json.Unmarshal(body, &templatesResult); err != nil {
+		return nil, fmt.Errorf("failed to parse templates response: %w", err)
+	}
+
+	return &templatesResult, nil
+}

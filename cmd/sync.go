@@ -67,6 +67,20 @@ Environment variables:
 		}
 		fmt.Fprintf(os.Stderr, "Stored %d products\n", len(resp.Data.AccountsAndCards))
 
+		// Sync transfer templates
+		fmt.Fprintln(os.Stderr, "Syncing transfer templates...")
+		templates, err := c.GetTemplates(accessToken)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to fetch templates: %v\n", err)
+		} else {
+			if err := database.UpsertTemplates(templates.Data.Templates); err != nil {
+				return fmt.Errorf("storing templates: %w", err)
+			}
+			if syncVerbose {
+				fmt.Fprintf(os.Stderr, "  Synced %d templates\n", len(templates.Data.Templates))
+			}
+		}
+
 		// Sync transactions for each product
 		for _, p := range resp.Data.AccountsAndCards {
 			if p.ProductType == "CARD" {

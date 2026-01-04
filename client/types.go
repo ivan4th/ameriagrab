@@ -204,6 +204,29 @@ type ClientsResponse struct {
 	} `json:"data"`
 }
 
+// TransferTemplate represents a saved transfer template
+type TransferTemplate struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	WorkflowCode string `json:"workflowCode"`
+	Data         struct {
+		CreditTarget struct {
+			Number string `json:"number"`
+			Type   string `json:"type"`
+		} `json:"creditTarget"`
+		Beneficiary string `json:"beneficiary"`
+	} `json:"data"`
+}
+
+// TemplatesResponse holds the response from /api/templates
+type TemplatesResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Templates []TransferTemplate `json:"templates"`
+	} `json:"data"`
+	ErrorMessages interface{} `json:"errorMessages"`
+}
+
 // Client represents the Ameriabank API client
 type Client struct {
 	HTTPClient  *http.Client

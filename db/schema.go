@@ -5,7 +5,7 @@ import (
 )
 
 // Current schema version
-const schemaVersion = 2
+const schemaVersion = 4
 
 // migrations is a list of SQL statements to run for each version
 var migrations = []string{
@@ -136,6 +136,26 @@ var migrations = []string{
 		FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_snapshot_products_snapshot ON snapshot_products(snapshot_id);
+	`,
+	// Version 3: Transfer templates
+	`
+	-- Transfer templates (for enriching transaction counterparty display)
+	CREATE TABLE IF NOT EXISTS transfer_templates (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		workflow_code TEXT,
+		masked_card_number TEXT,
+		account_number TEXT,
+		beneficiary TEXT,
+		synced_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_transfer_templates_card ON transfer_templates(masked_card_number);
+	CREATE INDEX IF NOT EXISTS idx_transfer_templates_account ON transfer_templates(account_number);
+	`,
+	// Version 4: Add card_key column for normalized card number matching
+	`
+	ALTER TABLE transfer_templates ADD COLUMN card_key TEXT;
+	CREATE INDEX IF NOT EXISTS idx_transfer_templates_card_key ON transfer_templates(card_key);
 	`,
 }
 

@@ -125,7 +125,15 @@ func getFromLocal(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(resp, getExtended, getWide)
+			// Create template lookup function for combined mode
+			var lookupFn output.TemplateLookupFunc
+			if getCombined {
+				lookupFn = func(maskedCard string) string {
+					name, _ := database.GetTemplateByMaskedCard(maskedCard)
+					return name
+				}
+			}
+			output.PrintCardTransactionsWithLookup(resp, getExtended, getWide, lookupFn)
 		}
 	} else {
 		// For accounts, return account transactions from DB

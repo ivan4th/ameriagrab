@@ -22,8 +22,16 @@ func TruncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
+// TemplateLookupFunc is a function that looks up a template name by masked card number
+type TemplateLookupFunc func(maskedCard string) string
+
 // PrintCardTransactions prints card transactions in human-readable table format
 func PrintCardTransactions(txns *client.TransactionsResponse, showExtended, wide bool) {
+	PrintCardTransactionsWithLookup(txns, showExtended, wide, nil)
+}
+
+// PrintCardTransactionsWithLookup prints card transactions with optional template name lookup
+func PrintCardTransactionsWithLookup(txns *client.TransactionsResponse, showExtended, wide bool, lookupFn TemplateLookupFunc) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	if showExtended {
 		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS\tCOUNTERPARTY")
@@ -62,7 +70,7 @@ func PrintCardTransactions(txns *client.TransactionsResponse, showExtended, wide
 		}
 
 		if showExtended {
-			receiver := formatReceiver(t.Extended)
+			receiver := formatReceiverWithLookup(t.Extended, lookupFn)
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				date, txType, amount, details, receiver)
 		} else {
@@ -74,21 +82,34 @@ func PrintCardTransactions(txns *client.TransactionsResponse, showExtended, wide
 	fmt.Fprintf(os.Stderr, "\nTotal: %d transactions\n", txns.Data.TotalCount)
 }
 
-// formatReceiver formats the receiver info from extended transaction data
-func formatReceiver(ext *client.TransactionExtendedInfo) string {
+// formatReceiverWithLookup formats the receiver info, using template lookup if available
+func formatReceiverWithLookup(ext *client.TransactionExtendedInfo, lookupFn TemplateLookupFunc) string {
 	if ext == nil {
 		return ""
 	}
 
 	// Get card or account number
-	acctOrCard := ext.CardMaskedNumber
-	if acctOrCard == "" {
-		acctOrCard = ext.CreditAccountNumber
-	}
+	cardNum := ext.CardMaskedNumber
+	acctNum := ext.CreditAccountNumber
 
 	// Check if name is valid (not empty or placeholder)
 	name := ext.BeneficiaryName
 	hasValidName := name != "" && name != "Firstname Lastname"
+
+	// Try template lookup for card number if no valid beneficiary name
+	if !hasValidName && lookupFn != nil && cardNum != "" {
+		if templateName := lookupFn(cardNum); templateName != "" {
+			// Found template: show "TemplateName (****1234)"
+			shortCard := shortenMaskedCard(cardNum)
+			return fmt.Sprintf("%s (%s)", templateName, shortCard)
+		}
+	}
+
+	// Fall back to original logic
+	acctOrCard := cardNum
+	if acctOrCard == "" {
+		acctOrCard = acctNum
+	}
 
 	if hasValidName && acctOrCard != "" {
 		return fmt.Sprintf("%s (%s)", name, acctOrCard)
@@ -100,6 +121,14 @@ func formatReceiver(ext *client.TransactionExtendedInfo) string {
 		return acctOrCard
 	}
 	return ""
+}
+
+// shortenMaskedCard shortens "4454********6615" to "****6615"
+func shortenMaskedCard(masked string) string {
+	if len(masked) < 4 {
+		return masked
+	}
+	return "****" + masked[len(masked)-4:]
 }
 
 // PrintAccountHistory prints account history in human-readable table format
