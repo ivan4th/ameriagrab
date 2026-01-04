@@ -35,19 +35,49 @@ type TransactionsResponse struct {
 
 // Transaction represents a card transaction
 type Transaction struct {
-	ID                         string `json:"id"`
-	TransactionType            string `json:"transactionType"`
-	AccountingType             string `json:"accountingType"`
-	State                      string `json:"state"`
-	Amount                     Amount `json:"amount"`
-	CorrespondentAccountNumber string `json:"correspondentAccountNumber"`
-	CorrespondentAccountName   string `json:"correspondentAccountName"`
-	Details                    string `json:"details"`
-	OperationDate              string `json:"operationDate"`
-	WorkflowCode               string `json:"workflowCode"`
-	Date                       string `json:"date"`
-	Year                       string `json:"year"`
-	Month                      string `json:"month"`
+	ID                         string                   `json:"id"`
+	TransactionType            string                   `json:"transactionType"`
+	AccountingType             string                   `json:"accountingType"`
+	State                      string                   `json:"state"`
+	Amount                     Amount                   `json:"amount"`
+	CorrespondentAccountNumber string                   `json:"correspondentAccountNumber"`
+	CorrespondentAccountName   string                   `json:"correspondentAccountName"`
+	Details                    string                   `json:"details"`
+	OperationDate              string                   `json:"operationDate"`
+	WorkflowCode               string                   `json:"workflowCode"`
+	Date                       string                   `json:"date"`
+	Year                       string                   `json:"year"`
+	Month                      string                   `json:"month"`
+	Extended                   *TransactionExtendedInfo `json:"extended,omitempty"`
+}
+
+// TransactionExtendedInfo holds additional transaction details from /api/transactions/{id}
+type TransactionExtendedInfo struct {
+	BeneficiaryName     string `json:"beneficiaryName,omitempty"`
+	BeneficiaryAddress  string `json:"beneficiaryAddress,omitempty"`
+	CreditAccountNumber string `json:"creditAccountNumber,omitempty"`
+	CardMaskedNumber    string `json:"cardMaskedNumber,omitempty"`
+	OperationID         string `json:"operationId,omitempty"`
+	SwiftDetails        string `json:"swiftDetails,omitempty"`
+}
+
+// TransactionDetailsResponse holds the response from /api/transactions/{id}
+type TransactionDetailsResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		Transaction struct {
+			ID                      string `json:"id"`
+			BeneficiaryName         string `json:"beneficiaryName"`
+			BeneficiaryAddress      string `json:"beneficiaryAddress"`
+			CreditAccountNumber     string `json:"creditAccountNumber"`
+			AdditionalInfo          *struct {
+				CardMaskedNumber     string `json:"cardMaskedNumber"`
+				ProcessedOperationID string `json:"processedOperationId"`
+			} `json:"additionalInfo"`
+			TransactionSwiftDetails interface{} `json:"transactionSwiftDetails"`
+		} `json:"transaction"`
+	} `json:"data"`
+	ErrorMessages interface{} `json:"errorMessages"`
 }
 
 // Amount represents a monetary amount with currency

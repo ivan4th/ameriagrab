@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/ivan4th/ameriagrab/client"
 	"github.com/ivan4th/ameriagrab/db"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -73,6 +77,7 @@ Environment variables:
 func syncCard(database *db.DB, c interface {
 	GetTransactions(accessToken, cardID string) (*client.TransactionsResponse, error)
 	GetEventsPast(accessToken, accountID string, size, page int) (*client.TransactionsResponse, error)
+	GetTransactionDetails(accessToken, transactionID string) (*client.TransactionDetailsResponse, error)
 }, accessToken, cardID, linkedAccountID, name string) error {
 	if syncVerbose {
 		fmt.Fprintf(os.Stderr, "Syncing card: %s (%s)\n", name, cardID)
@@ -124,6 +129,7 @@ func syncCard(database *db.DB, c interface {
 
 func syncCardAccountTransactions(database *db.DB, c interface {
 	GetEventsPast(accessToken, accountID string, size, page int) (*client.TransactionsResponse, error)
+	GetTransactionDetails(accessToken, transactionID string) (*client.TransactionDetailsResponse, error)
 }, accessToken, cardID, accountID, name string) error {
 	if syncVerbose {
 		fmt.Fprintf(os.Stderr, "  Fetching linked account transactions (account %s)...\n", accountID)
@@ -136,6 +142,7 @@ func syncCardAccountTransactions(database *db.DB, c interface {
 	}
 
 	totalInserted := 0
+	var allNewTxns []client.Transaction
 	page := 0
 
 	for {
@@ -166,6 +173,7 @@ func syncCardAccountTransactions(database *db.DB, c interface {
 				return fmt.Errorf("inserting linked account transactions: %w", err)
 			}
 			totalInserted += inserted
+			allNewTxns = append(allNewTxns, newTxns...)
 		}
 
 		// Stop if: less than page size returned, OR all transactions already existed
@@ -183,6 +191,77 @@ func syncCardAccountTransactions(database *db.DB, c interface {
 		fmt.Fprintf(os.Stderr, "  Card %s: +%d linked account transactions\n", name, totalInserted)
 	} else if syncVerbose {
 		fmt.Fprintf(os.Stderr, "  Card %s: no new linked account transactions\n", name)
+	}
+
+	// Fetch extended info for newly inserted transactions
+	if len(allNewTxns) > 0 {
+		if syncVerbose {
+			fmt.Fprintf(os.Stderr, "  Fetching extended info for %d new transactions...\n", len(allNewTxns))
+		}
+		if err := fetchAndStoreExtendedInfo(database, c, accessToken, cardID, allNewTxns); err != nil {
+			return fmt.Errorf("fetching extended info: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// fetchAndStoreExtendedInfo fetches extended info for transactions and stores in DB
+func fetchAndStoreExtendedInfo(database *db.DB, c interface {
+	GetTransactionDetails(accessToken, transactionID string) (*client.TransactionDetailsResponse, error)
+}, accessToken, cardID string, txns []client.Transaction) error {
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(5)
+	var mu sync.Mutex
+	var extInfos []struct {
+		txnID         string
+		operationDate string
+		ext           *client.TransactionExtendedInfo
+	}
+
+	for i := range txns {
+		idx := i
+		g.Go(func() error {
+			details, err := c.GetTransactionDetails(accessToken, txns[idx].ID)
+			if err != nil {
+				return fmt.Errorf("fetching extended info for %s: %w", txns[idx].ID, err)
+			}
+
+			ext := &client.TransactionExtendedInfo{
+				BeneficiaryName:     details.Data.Transaction.BeneficiaryName,
+				BeneficiaryAddress:  details.Data.Transaction.BeneficiaryAddress,
+				CreditAccountNumber: details.Data.Transaction.CreditAccountNumber,
+			}
+			if details.Data.Transaction.AdditionalInfo != nil {
+				ext.CardMaskedNumber = details.Data.Transaction.AdditionalInfo.CardMaskedNumber
+				ext.OperationID = details.Data.Transaction.AdditionalInfo.ProcessedOperationID
+			}
+			if details.Data.Transaction.TransactionSwiftDetails != nil {
+				if swiftJSON, err := json.Marshal(details.Data.Transaction.TransactionSwiftDetails); err == nil {
+					ext.SwiftDetails = string(swiftJSON)
+				}
+			}
+
+			mu.Lock()
+			extInfos = append(extInfos, struct {
+				txnID         string
+				operationDate string
+				ext           *client.TransactionExtendedInfo
+			}{txns[idx].ID, txns[idx].OperationDate, ext})
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// Store all extended info in DB
+	for _, info := range extInfos {
+		if err := database.UpdateTransactionExtendedInfo(cardID, info.txnID, info.operationDate, info.ext); err != nil {
+			return fmt.Errorf("storing extended info for %s: %w", info.txnID, err)
+		}
 	}
 
 	return nil

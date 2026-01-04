@@ -759,7 +759,7 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 	}
 
 	// Test size=0 (no limit)
-	result, err := db.GetLinkedAccountTransactions("card-001", 0, 0)
+	result, err := db.GetLinkedAccountTransactions("card-001", 0, 0, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -768,7 +768,7 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 	}
 
 	// Test pagination: size=2, page=0
-	result, err = db.GetLinkedAccountTransactions("card-001", 2, 0)
+	result, err = db.GetLinkedAccountTransactions("card-001", 2, 0, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}
@@ -777,7 +777,7 @@ func TestGetLinkedAccountTransactions(t *testing.T) {
 	}
 
 	// Test pagination: size=2, page=1
-	result, err = db.GetLinkedAccountTransactions("card-001", 2, 1)
+	result, err = db.GetLinkedAccountTransactions("card-001", 2, 1, false)
 	if err != nil {
 		t.Fatalf("failed to get transactions: %v", err)
 	}

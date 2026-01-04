@@ -68,6 +68,14 @@ var migrations = []string{
 		year TEXT,
 		month TEXT,
 		synced_at INTEGER NOT NULL,
+		-- Extended info columns (populated during sync)
+		beneficiary_name TEXT,
+		beneficiary_address TEXT,
+		credit_account_number TEXT,
+		card_masked_number TEXT,
+		ext_operation_id TEXT,
+		swift_details TEXT,
+		extended_fetched INTEGER DEFAULT 0,
 		PRIMARY KEY (id, operation_date)
 	);
 	CREATE INDEX IF NOT EXISTS idx_card_linked_txn_product_date ON card_linked_account_transactions(product_id, operation_date);

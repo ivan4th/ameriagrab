@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/ivan4th/ameriagrab/client"
 	"github.com/ivan4th/ameriagrab/output"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -16,6 +19,7 @@ var (
 	getJSONOutput      bool
 	getForceAccountAPI bool
 	getLocal           bool
+	getExtended        bool
 )
 
 var getCmd = &cobra.Command{
@@ -24,6 +28,11 @@ var getCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
+
+		// -x implies -a for cards (extended info only available via linked account API)
+		if getExtended {
+			getForceAccountAPI = true
+		}
 
 		if getLocal {
 			return getFromLocal(id)
@@ -56,7 +65,7 @@ func getFromLocal(id string) error {
 		if getForceAccountAPI {
 			// Get linked account transactions with pagination
 			// size=0 means no limit for DB
-			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage)
+			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage, getExtended)
 			if err != nil {
 				return fmt.Errorf("fetching linked account transactions: %w", err)
 			}
@@ -90,7 +99,7 @@ func getFromLocal(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(resp)
+			output.PrintCardTransactions(resp, getExtended)
 		}
 	} else {
 		// For accounts, return account transactions from DB
@@ -159,7 +168,7 @@ func getFromAPI(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(txns)
+			output.PrintCardTransactions(txns, false)
 		}
 	} else if productType == "CARD" && getForceAccountAPI {
 		// Card with --account flag: use events/past API with linked account ID
@@ -176,6 +185,15 @@ func getFromAPI(id string) error {
 		if err != nil {
 			return fmt.Errorf("fetching card account history: %w", err)
 		}
+
+		// Fetch extended info if requested
+		if getExtended && len(txns.Data.Entries) > 0 {
+			fmt.Fprintf(os.Stderr, "Fetching extended info for %d transactions...\n", len(txns.Data.Entries))
+			if err := fetchExtendedInfo(c, accessToken, txns.Data.Entries); err != nil {
+				return fmt.Errorf("fetching extended info: %w", err)
+			}
+		}
+
 		if getJSONOutput {
 			out, err := json.MarshalIndent(txns, "", "  ")
 			if err != nil {
@@ -183,7 +201,7 @@ func getFromAPI(id string) error {
 			}
 			fmt.Println(string(out))
 		} else {
-			output.PrintCardTransactions(txns)
+			output.PrintCardTransactions(txns, getExtended)
 		}
 	} else {
 		// Account: use history API
@@ -211,10 +229,49 @@ func getFromAPI(id string) error {
 	return nil
 }
 
+// fetchExtendedInfo fetches extended info for transactions in parallel using errgroup
+func fetchExtendedInfo(c *client.Client, accessToken string, txns []client.Transaction) error {
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(5)
+	var mu sync.Mutex
+
+	for i := range txns {
+		idx := i
+		g.Go(func() error {
+			details, err := c.GetTransactionDetails(accessToken, txns[idx].ID)
+			if err != nil {
+				return fmt.Errorf("fetching extended info for %s: %w", txns[idx].ID, err)
+			}
+
+			ext := &client.TransactionExtendedInfo{
+				BeneficiaryName:     details.Data.Transaction.BeneficiaryName,
+				BeneficiaryAddress:  details.Data.Transaction.BeneficiaryAddress,
+				CreditAccountNumber: details.Data.Transaction.CreditAccountNumber,
+			}
+			if details.Data.Transaction.AdditionalInfo != nil {
+				ext.CardMaskedNumber = details.Data.Transaction.AdditionalInfo.CardMaskedNumber
+				ext.OperationID = details.Data.Transaction.AdditionalInfo.ProcessedOperationID
+			}
+			if details.Data.Transaction.TransactionSwiftDetails != nil {
+				if swiftJSON, err := json.Marshal(details.Data.Transaction.TransactionSwiftDetails); err == nil {
+					ext.SwiftDetails = string(swiftJSON)
+				}
+			}
+
+			mu.Lock()
+			txns[idx].Extended = ext
+			mu.Unlock()
+			return nil
+		})
+	}
+	return g.Wait()
+}
+
 func init() {
 	getCmd.Flags().IntVarP(&getSize, "size", "s", 50, "Number of transactions to fetch")
 	getCmd.Flags().IntVarP(&getPage, "page", "p", 0, "Page number (0-indexed)")
 	getCmd.Flags().BoolVarP(&getJSONOutput, "json", "j", false, "Output as JSON")
 	getCmd.Flags().BoolVarP(&getForceAccountAPI, "account", "a", false, "Use account history API (even for cards)")
 	getCmd.Flags().BoolVarP(&getLocal, "local", "l", false, "Read from local database")
+	getCmd.Flags().BoolVarP(&getExtended, "extended", "x", false, "Fetch extended transaction info (implies -a for cards)")
 }

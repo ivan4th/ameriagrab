@@ -139,3 +139,36 @@ func (c *Client) GetEventsPast(accessToken, accountID string, size, page int) (*
 
 	return &result, nil
 }
+
+// GetTransactionDetails fetches extended info for a transaction by its UUID
+func (c *Client) GetTransactionDetails(accessToken, transactionID string) (*TransactionDetailsResponse, error) {
+	url := fmt.Sprintf("%s/api/transactions/%s", c.APIBaseURL, transactionID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction details request: %w", err)
+	}
+	c.AddAPIHeaders(req, accessToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch transaction details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read transaction details response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("transaction details request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result TransactionDetailsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse transaction details response: %w", err)
+	}
+
+	return &result, nil
+}

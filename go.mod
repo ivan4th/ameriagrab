@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/sync v0.16.0
 	modernc.org/sqlite v1.42.2
 )
 

@@ -22,9 +22,13 @@ func TruncateString(s string, maxLen int) string {
 }
 
 // PrintCardTransactions prints card transactions in human-readable table format
-func PrintCardTransactions(txns *client.TransactionsResponse) {
+func PrintCardTransactions(txns *client.TransactionsResponse, showExtended bool) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS")
+	if showExtended {
+		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS\tRECEIVER")
+	} else {
+		fmt.Fprintln(w, "DATE\tTYPE\tAMOUNT\tDETAILS")
+	}
 	for _, t := range txns.Data.Entries {
 		// Format amount with +/- sign based on accounting type
 		sign := "-"
@@ -47,11 +51,45 @@ func PrintCardTransactions(txns *client.TransactionsResponse) {
 		txType = strings.ReplaceAll(txType, "purchasecompletion:", "pcomp:")
 		txType = strings.ReplaceAll(txType, "purchase:", "p:")
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			date, txType, amount, TruncateString(t.Details, 50))
+		if showExtended {
+			receiver := formatReceiver(t.Extended)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				date, txType, amount, TruncateString(t.Details, 40), receiver)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				date, txType, amount, TruncateString(t.Details, 50))
+		}
 	}
 	w.Flush()
 	fmt.Fprintf(os.Stderr, "\nTotal: %d transactions\n", txns.Data.TotalCount)
+}
+
+// formatReceiver formats the receiver info from extended transaction data
+func formatReceiver(ext *client.TransactionExtendedInfo) string {
+	if ext == nil {
+		return ""
+	}
+
+	// Get card or account number
+	acctOrCard := ext.CardMaskedNumber
+	if acctOrCard == "" {
+		acctOrCard = ext.CreditAccountNumber
+	}
+
+	// Check if name is valid (not empty or placeholder)
+	name := ext.BeneficiaryName
+	hasValidName := name != "" && name != "Firstname Lastname"
+
+	if hasValidName && acctOrCard != "" {
+		return fmt.Sprintf("%s (%s)", name, acctOrCard)
+	}
+	if hasValidName {
+		return name
+	}
+	if acctOrCard != "" {
+		return acctOrCard
+	}
+	return ""
 }
 
 // PrintAccountHistory prints account history in human-readable table format
