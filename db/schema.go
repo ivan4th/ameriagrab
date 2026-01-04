@@ -5,7 +5,7 @@ import (
 )
 
 // Current schema version
-const schemaVersion = 1
+const schemaVersion = 2
 
 // migrations is a list of SQL statements to run for each version
 var migrations = []string{
@@ -109,6 +109,31 @@ var migrations = []string{
 		synced_at INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_acct_txn_product_date ON account_transactions(product_id, transaction_date);
+	`,
+	// Version 2: Snapshots
+	`
+	-- Snapshots table (point-in-time balance captures)
+	CREATE TABLE IF NOT EXISTS snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at INTEGER NOT NULL
+	);
+
+	-- Snapshot products (balance data at snapshot time)
+	CREATE TABLE IF NOT EXISTS snapshot_products (
+		snapshot_id INTEGER NOT NULL,
+		product_id TEXT NOT NULL,
+		product_type TEXT NOT NULL,
+		name TEXT,
+		card_number TEXT,
+		account_number TEXT,
+		currency TEXT,
+		balance REAL,
+		status TEXT,
+		order_index INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (snapshot_id, product_id),
+		FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_snapshot_products_snapshot ON snapshot_products(snapshot_id);
 	`,
 }
 

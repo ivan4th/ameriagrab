@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	syncVerbose bool
-	syncForce   bool
+	syncVerbose  bool
+	syncForce    bool
+	syncSnapshot bool
 )
 
 const syncPageSize = 1000
@@ -67,6 +68,15 @@ Environment variables:
 					fmt.Fprintf(os.Stderr, "Warning: error syncing account %s: %v\n", p.ID, err)
 				}
 			}
+		}
+
+		// Create snapshot if requested
+		if syncSnapshot {
+			snapshotID, err := database.CreateSnapshot()
+			if err != nil {
+				return fmt.Errorf("creating snapshot: %w", err)
+			}
+			fmt.Fprintf(os.Stderr, "Created snapshot #%d\n", snapshotID)
 		}
 
 		fmt.Fprintln(os.Stderr, "Sync complete!")
@@ -335,4 +345,5 @@ func syncAccount(database *db.DB, c interface {
 func init() {
 	syncCmd.Flags().BoolVarP(&syncVerbose, "verbose", "v", false, "Verbose output")
 	syncCmd.Flags().BoolVarP(&syncForce, "force", "f", false, "Force re-sync all transactions")
+	syncCmd.Flags().BoolVarP(&syncSnapshot, "snapshot", "s", false, "Create balance snapshot after sync")
 }

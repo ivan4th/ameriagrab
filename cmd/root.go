@@ -80,4 +80,5 @@ func init() {
 	RootCmd.AddCommand(listCmd)
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(syncCmd)
+	RootCmd.AddCommand(listSnapshotsCmd)
 }

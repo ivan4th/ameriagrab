@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ivan4th/ameriagrab/client"
+	"github.com/ivan4th/ameriagrab/db"
 )
 
 // TruncateString truncates a string to maxLen characters, adding "..." if truncated
@@ -152,4 +153,30 @@ func PrintAccountsAndCards(resp *client.AccountsAndCardsResponse) {
 			p.ProductType, p.ID, number, p.Name, p.Currency, p.Balance, p.Status)
 	}
 	w.Flush()
+}
+
+// PrintSnapshots prints snapshots grouped by date in human-readable format
+func PrintSnapshots(snapshots []db.Snapshot) {
+	for i, s := range snapshots {
+		// Print date header
+		fmt.Printf("=== %s ===\n", s.CreatedAt.Format("2006-01-02 15:04:05"))
+
+		// Print products table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "TYPE\tID\tNUMBER\tNAME\tCURRENCY\tBALANCE\tSTATUS")
+		for _, p := range s.Products {
+			number := p.CardNumber
+			if p.ProductType == "ACCOUNT" {
+				number = p.AccountNumber
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%.2f\t%s\n",
+				p.ProductType, p.ID, number, p.Name, p.Currency, p.Balance, p.Status)
+		}
+		w.Flush()
+
+		// Add blank line between snapshots (except after the last one)
+		if i < len(snapshots)-1 {
+			fmt.Println()
+		}
+	}
 }
