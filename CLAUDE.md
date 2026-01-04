@@ -21,8 +21,7 @@ go test ./... -v
 # Set credentials
 export AMERIA_USERNAME=$(op read 'op://Personal/Ameriabank personal/username')
 export AMERIA_PASSWORD=$(op read 'op://Personal/Ameriabank personal/password')
-export AMERIA_SESSION_DIR=/tmp/ameria-session  # optional, enables session persistence
-export AMERIA_DB_PATH=/tmp/ameria.db           # optional, enables sync and local mode
+export AMERIA_DB_PATH=/tmp/ameria.db  # optional, enables sync, local mode, and session persistence
 
 # List all accounts and cards
 ./ameriagrab list              # Table output
@@ -46,9 +45,8 @@ export AMERIA_DB_PATH=/tmp/ameria.db           # optional, enables sync and loca
 
 - `AMERIA_USERNAME` - Ameriabank username (required)
 - `AMERIA_PASSWORD` - Ameriabank password (required)
-- `AMERIA_SESSION_DIR` - Directory for session persistence (optional; if not set, no session is stored/loaded)
-- `AMERIA_DEBUG_DIR` - Directory for debug HTML files on errors (optional; if not set, no debug files are saved)
-- `AMERIA_DB_PATH` - Path to SQLite database for sync command and --local flag (optional)
+- `AMERIA_DEBUG_DIR` - Directory for debug HTML files on errors (optional)
+- `AMERIA_DB_PATH` - Path to SQLite database for sync command, --local flag, and session persistence (optional)
 
 ## Project Overview
 
@@ -90,7 +88,7 @@ ameriagrab/
 
 - **client**: Core API client for Ameriabank
   - `Client` struct: HTTP client, credentials, session state
-  - Session persistence with JSON files
+  - Session persistence via `SessionStorage` interface (implemented by db package)
   - OAuth authentication with push 2FA
   - API methods for accounts, cards, and transactions
 

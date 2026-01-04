@@ -32,8 +32,7 @@ Set environment variables:
 ```bash
 export AMERIA_USERNAME="your_username"
 export AMERIA_PASSWORD="your_password"
-export AMERIA_SESSION_DIR="/path/to/session"  # Optional: persist session
-export AMERIA_DB_PATH="/path/to/ameria.db"    # Required for sync/local mode
+export AMERIA_DB_PATH="/path/to/ameria.db"  # Required for sync/local mode, also stores session
 ```
 
 ## Usage
@@ -104,7 +103,7 @@ ameriagrab list-snapshots --json
 The tool uses Ameriabank's mobile app authentication flow:
 
 1. On first run, you'll be prompted to confirm via push notification on your phone
-2. Session is saved to `AMERIA_SESSION_DIR` and reused until expiration
+2. Session is saved to the SQLite database and reused until expiration
 3. Tokens are automatically refreshed when possible
 
 ## Database

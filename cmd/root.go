@@ -16,25 +16,36 @@ var RootCmd = &cobra.Command{
 	Long: `ameriagrab retrieves accounts, cards, and transaction data from Ameriabank.
 
 Environment variables:
-  AMERIA_USERNAME    - Ameriabank username (required)
-  AMERIA_PASSWORD    - Ameriabank password (required)
-  AMERIA_SESSION_DIR - Directory to persist session (optional)
-  AMERIA_DEBUG_DIR   - Directory to save debug files (optional)
-  AMERIA_DB_PATH     - Path to SQLite database for sync/local mode (optional)`,
+  AMERIA_USERNAME  - Ameriabank username (required)
+  AMERIA_PASSWORD  - Ameriabank password (required)
+  AMERIA_DEBUG_DIR - Directory to save debug files (optional)
+  AMERIA_DB_PATH   - Path to SQLite database for sync/local mode and session persistence (optional)`,
 }
 
 // SetupClient creates and authenticates the Ameriabank client
 func SetupClient() (*client.Client, string, error) {
 	username := os.Getenv("AMERIA_USERNAME")
 	password := os.Getenv("AMERIA_PASSWORD")
-	sessionDir := os.Getenv("AMERIA_SESSION_DIR")
 	debugDir := os.Getenv("AMERIA_DEBUG_DIR")
 
 	if username == "" || password == "" {
 		return nil, "", fmt.Errorf("AMERIA_USERNAME and AMERIA_PASSWORD environment variables must be set")
 	}
 
-	c, err := client.NewClient(username, password, sessionDir, debugDir)
+	// Try to use database for session storage if AMERIA_DB_PATH is set
+	var sessionStorage client.SessionStorage
+	dbPath := os.Getenv("AMERIA_DB_PATH")
+	if dbPath != "" {
+		database, err := db.Open(dbPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("opening database for session: %w", err)
+		}
+		sessionStorage = database
+		// Note: we don't close the database here - it will be used for the session
+		// The caller should manage the database lifecycle if needed
+	}
+
+	c, err := client.NewClient(username, password, sessionStorage, debugDir)
 	if err != nil {
 		return nil, "", fmt.Errorf("creating client: %w", err)
 	}

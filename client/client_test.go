@@ -10,10 +10,31 @@ import (
 	"time"
 )
 
-func TestNewClient(t *testing.T) {
-	tmpDir := t.TempDir()
+// mockSessionStorage is a simple in-memory session storage for testing
+type mockSessionStorage struct {
+	session *SessionData
+}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+func (m *mockSessionStorage) SaveSession(data *SessionData) error {
+	m.session = data
+	return nil
+}
+
+func (m *mockSessionStorage) LoadSession() (*SessionData, error) {
+	return m.session, nil
+}
+
+func (m *mockSessionStorage) UpdateClientID(clientID string) error {
+	if m.session != nil {
+		m.session.ClientID = clientID
+	}
+	return nil
+}
+
+func TestNewClient(t *testing.T) {
+	storage := &mockSessionStorage{}
+
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -24,32 +45,26 @@ func TestNewClient(t *testing.T) {
 	if c.Password != "testpass" {
 		t.Errorf("expected password 'testpass', got '%s'", c.Password)
 	}
-	if c.SessionDir != tmpDir {
-		t.Errorf("expected sessionDir '%s', got '%s'", tmpDir, c.SessionDir)
-	}
-	if c.SessionFile != filepath.Join(tmpDir, "session.json") {
-		t.Errorf("expected sessionFile '%s', got '%s'", filepath.Join(tmpDir, "session.json"), c.SessionFile)
+	if c.SessionStorage != storage {
+		t.Error("expected SessionStorage to be set")
 	}
 }
 
-func TestNewClient_NoSessionDir(t *testing.T) {
-	c, err := NewClient("testuser", "testpass", "", "")
+func TestNewClient_NoSessionStorage(t *testing.T) {
+	c, err := NewClient("testuser", "testpass", nil, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
 
-	if c.SessionDir != "" {
-		t.Errorf("expected empty sessionDir, got '%s'", c.SessionDir)
-	}
-	if c.SessionFile != "" {
-		t.Errorf("expected empty sessionFile, got '%s'", c.SessionFile)
+	if c.SessionStorage != nil {
+		t.Error("expected nil SessionStorage")
 	}
 }
 
 func TestSaveLoadSession(t *testing.T) {
-	tmpDir := t.TempDir()
+	storage := &mockSessionStorage{}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -62,17 +77,16 @@ func TestSaveLoadSession(t *testing.T) {
 		t.Fatalf("SaveSession failed: %v", err)
 	}
 
-	// Verify file was created with correct permissions
-	info, err := os.Stat(c.SessionFile)
-	if err != nil {
-		t.Fatalf("Session file not created: %v", err)
+	// Verify session was stored
+	if storage.session == nil {
+		t.Fatal("Session was not stored")
 	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("expected permissions 0600, got %o", info.Mode().Perm())
+	if storage.session.AccessToken != "test-access-token" {
+		t.Errorf("expected access token 'test-access-token', got '%s'", storage.session.AccessToken)
 	}
 
 	// Create new client and load session
-	c2, err := NewClient("testuser", "testpass", tmpDir, "")
+	c2, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -97,7 +111,7 @@ func TestSaveLoadSession(t *testing.T) {
 }
 
 func TestSaveSession_Disabled(t *testing.T) {
-	c, err := NewClient("testuser", "testpass", "", "")
+	c, err := NewClient("testuser", "testpass", nil, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -110,24 +124,20 @@ func TestSaveSession_Disabled(t *testing.T) {
 }
 
 func TestLoadSession_Expired(t *testing.T) {
-	tmpDir := t.TempDir()
+	storage := &mockSessionStorage{
+		session: &SessionData{
+			AccessToken:  "expired-token",
+			RefreshToken: "expired-refresh",
+			ExpiresAt:    time.Now().Add(-time.Hour), // Expired
+			ClientID:     "test-client",
+			Cookies:      []SerializedCookie{},
+		},
+	}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
-
-	// Write an expired session directly
-	session := SessionData{
-		AccessToken:  "expired-token",
-		RefreshToken: "expired-refresh",
-		ExpiresAt:    time.Now().Add(-time.Hour), // Expired
-		ClientID:     "test-client",
-		Cookies:      []SerializedCookie{},
-	}
-
-	data, _ := json.MarshalIndent(session, "", "  ")
-	os.WriteFile(c.SessionFile, data, 0600)
 
 	// Load should return nil for expired session
 	loaded, err := c.LoadSession()
@@ -140,24 +150,20 @@ func TestLoadSession_Expired(t *testing.T) {
 }
 
 func TestLoadSession_AlmostExpired(t *testing.T) {
-	tmpDir := t.TempDir()
+	storage := &mockSessionStorage{
+		session: &SessionData{
+			AccessToken:  "almost-expired-token",
+			RefreshToken: "refresh",
+			ExpiresAt:    time.Now().Add(30 * time.Second), // Within 1-minute buffer
+			ClientID:     "test-client",
+			Cookies:      []SerializedCookie{},
+		},
+	}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
-
-	// Write a session that expires in 30 seconds (within 1-minute buffer)
-	session := SessionData{
-		AccessToken:  "almost-expired-token",
-		RefreshToken: "refresh",
-		ExpiresAt:    time.Now().Add(30 * time.Second),
-		ClientID:     "test-client",
-		Cookies:      []SerializedCookie{},
-	}
-
-	data, _ := json.MarshalIndent(session, "", "  ")
-	os.WriteFile(c.SessionFile, data, 0600)
 
 	// Load should return nil (within 1-minute expiration buffer)
 	loaded, err := c.LoadSession()
@@ -169,15 +175,15 @@ func TestLoadSession_AlmostExpired(t *testing.T) {
 	}
 }
 
-func TestLoadSession_NoFile(t *testing.T) {
-	tmpDir := t.TempDir()
+func TestLoadSession_NoSession(t *testing.T) {
+	storage := &mockSessionStorage{session: nil}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
 
-	// No session file exists
+	// No session exists
 	session, err := c.LoadSession()
 	if err != nil {
 		t.Fatalf("LoadSession failed: %v", err)
@@ -188,7 +194,7 @@ func TestLoadSession_NoFile(t *testing.T) {
 }
 
 func TestLoadSession_Disabled(t *testing.T) {
-	c, err := NewClient("testuser", "testpass", "", "")
+	c, err := NewClient("testuser", "testpass", nil, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -202,27 +208,10 @@ func TestLoadSession_Disabled(t *testing.T) {
 	}
 }
 
-func TestLoadSession_CorruptedFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
-	if err != nil {
-		t.Fatalf("NewClient failed: %v", err)
-	}
-
-	// Write corrupted JSON
-	os.WriteFile(c.SessionFile, []byte("not valid json"), 0600)
-
-	_, err = c.LoadSession()
-	if err == nil {
-		t.Error("expected error for corrupted session file")
-	}
-}
-
 func TestUpdateSessionClientID(t *testing.T) {
-	tmpDir := t.TempDir()
+	storage := &mockSessionStorage{}
 
-	c, err := NewClient("testuser", "testpass", tmpDir, "")
+	c, err := NewClient("testuser", "testpass", storage, "")
 	if err != nil {
 		t.Fatalf("NewClient failed: %v", err)
 	}
@@ -241,14 +230,9 @@ func TestUpdateSessionClientID(t *testing.T) {
 		t.Fatalf("UpdateSessionClientID failed: %v", err)
 	}
 
-	// Load and verify
-	c2, _ := NewClient("testuser", "testpass", tmpDir, "")
-	session, err := c2.LoadSession()
-	if err != nil {
-		t.Fatalf("LoadSession failed: %v", err)
-	}
-	if session.ClientID != "updated-client-id" {
-		t.Errorf("expected clientID 'updated-client-id', got '%s'", session.ClientID)
+	// Verify update
+	if storage.session.ClientID != "updated-client-id" {
+		t.Errorf("expected clientID 'updated-client-id', got '%s'", storage.session.ClientID)
 	}
 }
 
@@ -275,7 +259,7 @@ func TestMin(t *testing.T) {
 func TestSaveDebugFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	c, _ := NewClient("testuser", "testpass", "", tmpDir)
+	c, _ := NewClient("testuser", "testpass", nil, tmpDir)
 
 	c.SaveDebugFile("test.txt", []byte("test content"))
 
@@ -290,7 +274,7 @@ func TestSaveDebugFile(t *testing.T) {
 }
 
 func TestSaveDebugFile_NoDebugDir(t *testing.T) {
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 
 	// Should not panic or error when debug dir is not set
 	c.SaveDebugFile("test.txt", []byte("test content"))
@@ -499,7 +483,7 @@ func TestGetAccountsAndCards_WithMockServer(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -526,7 +510,7 @@ func TestGetTransactions_WithMockServer(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -556,7 +540,7 @@ func TestGetAccountHistory_WithMockServer(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -583,7 +567,7 @@ func TestGetEventsPast_WithMockServer(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -607,7 +591,7 @@ func TestValidateSession_Valid(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -624,7 +608,7 @@ func TestValidateSession_Invalid(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -638,7 +622,7 @@ func TestInitializeSession_WithMockServer(t *testing.T) {
 	server := mockAPIServer(t)
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 
 	err := c.InitializeSession("test-token")
@@ -658,7 +642,7 @@ func TestGetTransactions_ServerError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 
@@ -675,7 +659,7 @@ func TestGetAccountsAndCards_NotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c, _ := NewClient("testuser", "testpass", "", "")
+	c, _ := NewClient("testuser", "testpass", nil, "")
 	c.APIBaseURL = server.URL
 	c.ClientID = "test-client-id"
 

@@ -182,6 +182,16 @@ type SerializedCookie struct {
 	HttpOnly bool      `json:"http_only"`
 }
 
+// SessionStorage is an interface for persisting session data
+type SessionStorage interface {
+	// SaveSession saves session data
+	SaveSession(data *SessionData) error
+	// LoadSession loads session data, returns nil if no session exists
+	LoadSession() (*SessionData, error)
+	// UpdateClientID updates just the client ID in the saved session
+	UpdateClientID(clientID string) error
+}
+
 // UserInfoResponse holds the user info API response
 type UserInfoResponse struct {
 	Status string `json:"status"`
@@ -229,13 +239,12 @@ type TemplatesResponse struct {
 
 // Client represents the Ameriabank API client
 type Client struct {
-	HTTPClient  *http.Client
-	Username    string
-	Password    string
-	SessionDir  string
-	SessionFile string
-	DebugDir    string
-	ClientID    string // Consistent client ID for this session
-	APIBaseURL  string // Base URL for API calls (defaults to APIBaseURL constant)
-	AuthBaseURL string // Base URL for auth calls (defaults to AuthBaseURL constant)
+	HTTPClient     *http.Client
+	Username       string
+	Password       string
+	DebugDir       string
+	ClientID       string         // Consistent client ID for this session
+	APIBaseURL     string         // Base URL for API calls (defaults to APIBaseURL constant)
+	AuthBaseURL    string         // Base URL for auth calls (defaults to AuthBaseURL constant)
+	SessionStorage SessionStorage // Optional session persistence
 }

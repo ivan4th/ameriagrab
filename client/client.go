@@ -10,7 +10,7 @@ import (
 )
 
 // NewClient creates a new Ameriabank API client
-func NewClient(username, password, sessionDir, debugDir string) (*Client, error) {
+func NewClient(username, password string, sessionStorage SessionStorage, debugDir string) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
@@ -28,24 +28,19 @@ func NewClient(username, password, sessionDir, debugDir string) (*Client, error)
 	}
 
 	c := &Client{
-		HTTPClient:  httpClient,
-		Username:    username,
-		Password:    password,
-		ClientID:    "", // Will be set by InitializeSession or restored from saved session
-		APIBaseURL:  APIBaseURL,
-		AuthBaseURL: AuthBaseURL,
+		HTTPClient:     httpClient,
+		Username:       username,
+		Password:       password,
+		ClientID:       "", // Will be set by InitializeSession or restored from saved session
+		APIBaseURL:     APIBaseURL,
+		AuthBaseURL:    AuthBaseURL,
+		SessionStorage: sessionStorage,
 	}
 
-	// Set up session directory with restricted permissions (if provided)
-	if sessionDir != "" {
-		if err := os.MkdirAll(sessionDir, 0700); err != nil {
-			return nil, fmt.Errorf("failed to create session directory: %w", err)
-		}
-		c.SessionDir = sessionDir
-		c.SessionFile = filepath.Join(sessionDir, "session.json")
-		fmt.Fprintf(os.Stderr, "Debug: Session persistence enabled at %s\n", c.SessionFile)
+	if sessionStorage != nil {
+		fmt.Fprintf(os.Stderr, "Debug: Session persistence enabled\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "Debug: Session persistence disabled (AMERIA_SESSION_DIR not set)\n")
+		fmt.Fprintf(os.Stderr, "Debug: Session persistence disabled\n")
 	}
 
 	// Set up debug directory (if provided)

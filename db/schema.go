@@ -5,7 +5,7 @@ import (
 )
 
 // Current schema version
-const schemaVersion = 4
+const schemaVersion = 5
 
 // migrations is a list of SQL statements to run for each version
 var migrations = []string{
@@ -156,6 +156,18 @@ var migrations = []string{
 	`
 	ALTER TABLE transfer_templates ADD COLUMN card_key TEXT;
 	CREATE INDEX IF NOT EXISTS idx_transfer_templates_card_key ON transfer_templates(card_key);
+	`,
+	// Version 5: Session storage (replaces file-based session)
+	`
+	CREATE TABLE IF NOT EXISTS session (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		access_token TEXT NOT NULL,
+		refresh_token TEXT NOT NULL,
+		expires_at INTEGER NOT NULL,
+		client_id TEXT,
+		cookies_json TEXT,
+		updated_at INTEGER NOT NULL
+	);
 	`,
 }
 

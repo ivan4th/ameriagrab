@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,13 +23,13 @@ func GetSessionURLsWithBases(authBase, apiBase string) []*url.URL {
 	return []*url.URL{authURL, apiURL, mainURL}
 }
 
-// SaveSession saves the current session (cookies + tokens) to disk
+// SaveSession saves the current session (cookies + tokens) to storage
 func (c *Client) SaveSession(accessToken, refreshToken string, expiresIn int) error {
-	if c.SessionFile == "" {
+	if c.SessionStorage == nil {
 		return nil // Session persistence disabled
 	}
 
-	session := SessionData{
+	session := &SessionData{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(expiresIn) * time.Second),
@@ -53,68 +52,41 @@ func (c *Client) SaveSession(accessToken, refreshToken string, expiresIn int) er
 		}
 	}
 
-	data, err := json.MarshalIndent(session, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
+	if err := c.SessionStorage.SaveSession(session); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
 	}
 
-	// Write with restricted permissions (owner read/write only)
-	if err := os.WriteFile(c.SessionFile, data, 0600); err != nil {
-		return fmt.Errorf("failed to write session file: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Debug: Session saved to %s\n", c.SessionFile)
+	fmt.Fprintf(os.Stderr, "Debug: Session saved\n")
 	return nil
 }
 
 // UpdateSessionClientID updates the saved session with the current clientID
 func (c *Client) UpdateSessionClientID() error {
-	if c.SessionFile == "" {
+	if c.SessionStorage == nil {
 		return nil // Session persistence disabled
 	}
 
-	data, err := os.ReadFile(c.SessionFile)
-	if err != nil {
-		return fmt.Errorf("failed to read session file: %w", err)
-	}
-
-	var session SessionData
-	if err := json.Unmarshal(data, &session); err != nil {
-		return fmt.Errorf("failed to parse session: %w", err)
-	}
-
-	session.ClientID = c.ClientID
-
-	data, err = json.MarshalIndent(session, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
-	}
-
-	if err := os.WriteFile(c.SessionFile, data, 0600); err != nil {
-		return fmt.Errorf("failed to write session file: %w", err)
+	if err := c.SessionStorage.UpdateClientID(c.ClientID); err != nil {
+		return fmt.Errorf("failed to update session client ID: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Debug: Session updated with Client ID: %s\n", c.ClientID)
 	return nil
 }
 
-// LoadSession attempts to load a saved session from disk
+// LoadSession attempts to load a saved session from storage
 func (c *Client) LoadSession() (*SessionData, error) {
-	if c.SessionFile == "" {
+	if c.SessionStorage == nil {
 		return nil, nil // Session persistence disabled
 	}
 
-	data, err := os.ReadFile(c.SessionFile)
+	session, err := c.SessionStorage.LoadSession()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil // No saved session
-		}
-		return nil, fmt.Errorf("failed to read session file: %w", err)
+		return nil, fmt.Errorf("failed to load session: %w", err)
 	}
 
-	var session SessionData
-	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("failed to parse session file: %w", err)
+	if session == nil {
+		return nil, nil // No saved session
 	}
 
 	// Check if token is expired (with 1 minute buffer)
@@ -149,8 +121,8 @@ func (c *Client) LoadSession() (*SessionData, error) {
 		fmt.Fprintf(os.Stderr, "Debug: Restored Client ID: %s\n", c.ClientID)
 	}
 
-	fmt.Fprintf(os.Stderr, "Debug: Session loaded from %s (expires at %s)\n", c.SessionFile, session.ExpiresAt.Format(time.RFC3339))
-	return &session, nil
+	fmt.Fprintf(os.Stderr, "Debug: Session loaded (expires at %s)\n", session.ExpiresAt.Format(time.RFC3339))
+	return session, nil
 }
 
 // ValidateSession checks if the saved session is still valid by making a test API call
