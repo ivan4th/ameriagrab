@@ -1,1 +1,4 @@
 ameriagrab
+*.db
+*.db-shm
+*.db-wal
