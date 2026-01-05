@@ -62,13 +62,13 @@ func getFromLocal(id string) error {
 	}
 	defer database.Close()
 
-	// Get product info
-	product, err := database.GetProductByID(id)
+	// Get product info (by ID or name)
+	product, err := database.GetProductByNameOrID(id)
 	if err != nil {
 		return fmt.Errorf("fetching product: %w", err)
 	}
 	if product == nil {
-		return fmt.Errorf("ID %s not found in database", id)
+		return fmt.Errorf("product %q not found in database", id)
 	}
 
 	if product.ProductType == "CARD" {
@@ -84,29 +84,29 @@ func getFromLocal(id string) error {
 				IncludeExtended: getExtended,
 				Ascending:       getAscending,
 			}
-			txns, totalCount, err = database.GetCombinedTransactions(id, opts)
+			txns, totalCount, err = database.GetCombinedTransactions(product.ID, opts)
 			if err != nil {
 				return fmt.Errorf("fetching combined transactions: %w", err)
 			}
 		} else if getForceAccountAPI {
 			// Get linked account transactions with pagination
 			// size=0 means no limit for DB
-			txns, err = database.GetLinkedAccountTransactions(id, getSize, getPage, getExtended, getAscending)
+			txns, err = database.GetLinkedAccountTransactions(product.ID, getSize, getPage, getExtended, getAscending)
 			if err != nil {
 				return fmt.Errorf("fetching linked account transactions: %w", err)
 			}
-			totalCount, err = database.CountLinkedAccountTransactions(id)
+			totalCount, err = database.CountLinkedAccountTransactions(product.ID)
 			if err != nil {
 				return fmt.Errorf("counting linked account transactions: %w", err)
 			}
 		} else {
 			// Get card transactions with pagination
 			// size=0 means no limit for DB
-			txns, err = database.GetCardTransactions(id, getSize, getPage, getAscending)
+			txns, err = database.GetCardTransactions(product.ID, getSize, getPage, getAscending)
 			if err != nil {
 				return fmt.Errorf("fetching card transactions: %w", err)
 			}
-			totalCount, err = database.CountCardTransactions(id)
+			totalCount, err = database.CountCardTransactions(product.ID)
 			if err != nil {
 				return fmt.Errorf("counting card transactions: %w", err)
 			}
@@ -137,7 +137,7 @@ func getFromLocal(id string) error {
 		}
 	} else {
 		// For accounts, return account transactions from DB
-		txns, err := database.GetAccountTransactions(id, getAscending)
+		txns, err := database.GetAccountTransactions(product.ID, getAscending)
 		if err != nil {
 			return fmt.Errorf("fetching account transactions: %w", err)
 		}

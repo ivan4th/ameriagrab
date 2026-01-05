@@ -146,6 +146,77 @@ func (db *DB) GetProductByID(id string) (*client.ProductInfo, error) {
 	return &p, nil
 }
 
+// GetProductByNameOrID retrieves a product by ID first, then by name if not found
+func (db *DB) GetProductByNameOrID(identifier string) (*client.ProductInfo, error) {
+	// First try by ID
+	product, err := db.GetProductByID(identifier)
+	if err != nil {
+		return nil, err
+	}
+	if product != nil {
+		return product, nil
+	}
+
+	// Then try by name (case-insensitive)
+	rows, err := db.Query(`
+		SELECT id, product_type, name, card_number, account_number,
+			   account_id, currency, balance, available_balance, status
+		FROM products WHERE LOWER(name) = LOWER(?)
+	`, identifier)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query product by name: %w", err)
+	}
+	defer rows.Close()
+
+	var products []client.ProductInfo
+	for rows.Next() {
+		var p client.ProductInfo
+		var cardNumber, accountNumber, accountID sql.NullString
+		var availableBalance sql.NullFloat64
+
+		err := rows.Scan(
+			&p.ID,
+			&p.ProductType,
+			&p.Name,
+			&cardNumber,
+			&accountNumber,
+			&accountID,
+			&p.Currency,
+			&p.Balance,
+			&availableBalance,
+			&p.Status,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan product: %w", err)
+		}
+
+		p.CardNumber = cardNumber.String
+		p.AccountNumber = accountNumber.String
+		p.AccountID = accountID.String
+		p.AvailableBalance = availableBalance.Float64
+
+		products = append(products, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating products: %w", err)
+	}
+
+	if len(products) == 0 {
+		return nil, nil
+	}
+
+	if len(products) > 1 {
+		ids := make([]string, len(products))
+		for i, p := range products {
+			ids[i] = p.ID
+		}
+		return nil, fmt.Errorf("ambiguous name %q matches multiple products: %v", identifier, ids)
+	}
+
+	return &products[0], nil
+}
+
 // nullString returns a sql.NullString for empty strings
 func nullString(s string) sql.NullString {
 	if s == "" {

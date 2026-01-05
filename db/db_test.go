@@ -890,3 +890,252 @@ func TestGetExistingLinkedAccountTxnKeys(t *testing.T) {
 		t.Errorf("lat-003 key should not exist")
 	}
 }
+
+func TestGetProductByNameOrID_ByID(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	products := []client.ProductInfo{
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "My Card",
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Lookup by ID should work
+	p, err := db.GetProductByNameOrID("card-001")
+	if err != nil {
+		t.Fatalf("failed to get product by ID: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+	if p.ID != "card-001" {
+		t.Errorf("expected ID card-001, got %s", p.ID)
+	}
+	if p.Name != "My Card" {
+		t.Errorf("expected name 'My Card', got %s", p.Name)
+	}
+}
+
+func TestGetProductByNameOrID_ByName(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	products := []client.ProductInfo{
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "VISA_CLASSIC",
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Lookup by exact name should work
+	p, err := db.GetProductByNameOrID("VISA_CLASSIC")
+	if err != nil {
+		t.Fatalf("failed to get product by name: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+	if p.ID != "card-001" {
+		t.Errorf("expected ID card-001, got %s", p.ID)
+	}
+}
+
+func TestGetProductByNameOrID_ByNameCaseInsensitive(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	products := []client.ProductInfo{
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "VISA_CLASSIC",
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Lookup by name with different case should work
+	p, err := db.GetProductByNameOrID("visa_classic")
+	if err != nil {
+		t.Fatalf("failed to get product by name (lowercase): %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+	if p.ID != "card-001" {
+		t.Errorf("expected ID card-001, got %s", p.ID)
+	}
+
+	// Mixed case should also work
+	p, err = db.GetProductByNameOrID("Visa_Classic")
+	if err != nil {
+		t.Fatalf("failed to get product by name (mixed case): %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+}
+
+func TestGetProductByNameOrID_NotFound(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	products := []client.ProductInfo{
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "My Card",
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Non-existent ID/name should return nil, not error
+	p, err := db.GetProductByNameOrID("nonexistent")
+	if err != nil {
+		t.Fatalf("expected nil error for not found, got: %v", err)
+	}
+	if p != nil {
+		t.Errorf("expected nil product for not found, got: %+v", p)
+	}
+}
+
+func TestGetProductByNameOrID_AmbiguousName(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Two products with the same name
+	products := []client.ProductInfo{
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "CURRENT",
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+		{
+			ID:          "card-002",
+			ProductType: "CARD",
+			Name:        "CURRENT",
+			Currency:    "USD",
+			Balance:     1000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Lookup by ambiguous name should return error
+	p, err := db.GetProductByNameOrID("CURRENT")
+	if err == nil {
+		t.Fatal("expected error for ambiguous name, got nil")
+	}
+	if p != nil {
+		t.Errorf("expected nil product for ambiguous name, got: %+v", p)
+	}
+	// Error message should mention "ambiguous"
+	if !contains(err.Error(), "ambiguous") {
+		t.Errorf("expected error to contain 'ambiguous', got: %v", err)
+	}
+}
+
+func TestGetProductByNameOrID_IDTakesPriority(t *testing.T) {
+	db, err := OpenInMemory()
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Product with ID that matches another product's name
+	products := []client.ProductInfo{
+		{
+			ID:          "SAVINGS",
+			ProductType: "ACCOUNT",
+			Name:        "Savings Account",
+			Currency:    "AMD",
+			Balance:     100000.0,
+			Status:      "ACTIVE",
+		},
+		{
+			ID:          "card-001",
+			ProductType: "CARD",
+			Name:        "SAVINGS", // Name matches ID of first product
+			Currency:    "AMD",
+			Balance:     50000.0,
+			Status:      "ACTIVE",
+		},
+	}
+	if err := db.UpsertProducts(products); err != nil {
+		t.Fatalf("failed to upsert products: %v", err)
+	}
+
+	// Lookup "SAVINGS" should find by ID first (the account), not by name (the card)
+	p, err := db.GetProductByNameOrID("SAVINGS")
+	if err != nil {
+		t.Fatalf("failed to get product: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected product, got nil")
+	}
+	if p.ID != "SAVINGS" {
+		t.Errorf("expected ID 'SAVINGS' (by ID match), got %s", p.ID)
+	}
+	if p.ProductType != "ACCOUNT" {
+		t.Errorf("expected ACCOUNT (found by ID), got %s", p.ProductType)
+	}
+}
+
+// contains checks if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
